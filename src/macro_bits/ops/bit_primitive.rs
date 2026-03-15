@@ -1,9 +1,2 @@
-mod and;
-mod mshl;
-mod mshr;
-mod not;
-mod or;
-mod rev;
-mod shl;
-mod shr;
-mod xor;
+mod binary_op;
+mod unary_op;

@@ -1,7 +1,7 @@
 mod construction;
 mod ops;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct MacroBits {
     len: usize,       // 比特长度
     data: Box<[u64]>, // 真正存储比特的堆内存
