@@ -1,5 +1,5 @@
 mod layout_helper;
-mod macro_bits;
+mod widebits;
 
 pub(crate) use layout_helper::WBLH;
-pub use macro_bits::WideBits;
+pub use widebits::WideBits;

@@ -1,4 +1,4 @@
-use crate::{WBLH, macro_bits::WideBits};
+use crate::{WBLH, widebits::WideBits};
 
 impl WideBits {
     #[inline]

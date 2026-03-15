@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod binary_op_tests;
 
+#[cfg(target_arch = "x86_64")]
 mod avx2;
 mod scalar;
 

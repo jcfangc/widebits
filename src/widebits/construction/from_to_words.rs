@@ -1,4 +1,4 @@
-use crate::{WBLH, WideBits, macro_bits::construction::ConstructionError};
+use crate::{WBLH, WideBits, widebits::construction::ConstructionError};
 
 impl WideBits {
     #[inline]
