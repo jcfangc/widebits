@@ -3,8 +3,8 @@ use crate::{MBLH, macro_bits::MacroBits};
 impl MacroBits {
     #[inline]
     pub fn ones(len: usize) -> Self {
-        let mut data = vec![u64::MAX; MBLH::word_len(len)];
-        MBLH::sanitize_last(&mut data, len);
+        let mut data = vec![u64::MAX; MBLH::required_word_len(len)];
+        MBLH::sanitize_last_word(&mut data, len);
         Self::new_unchecked(len, data.into_boxed_slice())
     }
 }

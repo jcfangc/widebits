@@ -1,17 +1,35 @@
-use crate::{MBLH, macro_bits::MacroBits};
+use crate::{MBLH, MacroBits, macro_bits::construction::ConstructionError};
 
 impl MacroBits {
     #[inline]
-    pub fn from_words(words: &[u64], len: usize) -> Self {
-        let mut data = words.to_vec().into_boxed_slice();
-        MBLH::sanitize_last(&mut data, len);
-        Self::new_unchecked(len, data)
+    pub fn try_from_words(words: &[u64], len: usize) -> Result<Self, ConstructionError> {
+        let required_word_len = MBLH::required_word_len(len);
+        if words.len() < required_word_len {
+            return Err(ConstructionError::InsufficientWords {
+                required: required_word_len,
+                provided: words.len(),
+            });
+        }
+        let mut data = words[..required_word_len].to_vec().into_boxed_slice();
+        MBLH::sanitize_last_word(&mut data, len);
+        Ok(Self::new_unchecked(len, data))
     }
 
     #[inline]
-    pub fn from_words_boxed(mut data: Box<[u64]>, len: usize) -> Self {
-        MBLH::sanitize_last(&mut data, len);
-        Self::new_unchecked(len, data)
+    pub fn try_from_words_boxed(
+        mut data: Box<[u64]>,
+        len: usize,
+    ) -> Result<Self, ConstructionError> {
+        let required_word_len = MBLH::required_word_len(len);
+        if data.len() < required_word_len {
+            return Err(ConstructionError::InsufficientWords {
+                required: required_word_len,
+                provided: data.len(),
+            });
+        }
+        data = data[..required_word_len].into();
+        MBLH::sanitize_last_word(&mut data, len);
+        Ok(Self::new_unchecked(len, data))
     }
 }
 
@@ -27,20 +45,18 @@ mod from_words_tests {
         #[test]
         fn zero_len() {
             let words = [123u64, 456];
-            let b = MacroBits::from_words(&words, 0);
+
+            let b = MacroBits::try_from_words(&words, 0).unwrap();
 
             assert_eq!(b.len(), 0);
-            assert_eq!(b.data().len(), 2);
-
-            // tail mask 应该变成 MAX
-            assert_eq!(b.data()[0], words[0]);
-            assert_eq!(b.data()[1], words[1]);
+            assert!(b.data().is_empty());
         }
 
         #[test]
         fn exact_word_boundary() {
             let words = [u64::MAX, u64::MAX];
-            let b = MacroBits::from_words(&words, 128);
+
+            let b = MacroBits::try_from_words(&words, 128).unwrap();
 
             assert_eq!(b.len(), 128);
             assert_eq!(b.data(), &words);
@@ -49,7 +65,8 @@ mod from_words_tests {
         #[test]
         fn tail_mask_applied() {
             let words = [u64::MAX];
-            let b = MacroBits::from_words(&words, 10);
+
+            let b = MacroBits::try_from_words(&words, 10).unwrap();
 
             let expected = (1u64 << 10) - 1;
 
@@ -60,7 +77,8 @@ mod from_words_tests {
         #[test]
         fn multi_word_tail_mask() {
             let words = [u64::MAX, u64::MAX];
-            let b = MacroBits::from_words(&words, 70);
+
+            let b = MacroBits::try_from_words(&words, 70).unwrap();
 
             assert_eq!(b.data()[0], u64::MAX);
 
@@ -69,6 +87,21 @@ mod from_words_tests {
 
             assert_eq!(b.data()[1], mask);
         }
+
+        #[test]
+        fn insufficient_words_error() {
+            let words = [0u64];
+
+            let err = MacroBits::try_from_words(&words, 130).unwrap_err();
+
+            assert_eq!(
+                err,
+                ConstructionError::InsufficientWords {
+                    required: 3,
+                    provided: 1
+                }
+            );
+        }
     }
 
     mod prop_tests {
@@ -76,45 +109,59 @@ mod from_words_tests {
 
         proptest! {
 
-            // len 必须被正确保存
             #[test]
             fn len_preserved(
                 len in 0usize..512,
                 words in prop::collection::vec(any::<u64>(), 0..16)
             ) {
-                let b = MacroBits::from_words(&words, len);
 
-                prop_assert_eq!(b.len(), len);
+                let required = MBLH::required_word_len(len);
+
+                if words.len() < required {
+                    prop_assert!(MacroBits::try_from_words(&words, len).is_err());
+                } else {
+                    let b = MacroBits::try_from_words(&words, len).unwrap();
+                    prop_assert_eq!(b.len(), len);
+                }
             }
 
-            // word 数量保持不变
             #[test]
-            fn word_count_preserved(
+            fn word_len_correct(
                 len in 0usize..512,
                 words in prop::collection::vec(any::<u64>(), 0..16)
             ) {
-                let b = MacroBits::from_words(&words, len);
 
-                prop_assert_eq!(b.data().len(), words.len());
+                let required = MBLH::required_word_len(len);
+
+                if words.len() >= required {
+                    let b = MacroBits::try_from_words(&words, len).unwrap();
+
+                    prop_assert_eq!(b.data().len(), required);
+                }
             }
 
-            // tail mask 必须正确
             #[test]
             fn tail_mask_correct(
-                len in 0usize..512,
+                len in 1usize..512,
                 words in prop::collection::vec(any::<u64>(), 1..16)
             ) {
-                let b = MacroBits::from_words(&words, len);
 
-                let rem = len % MBLH::WORD_BIT_WIDTH;
+                let required = MBLH::required_word_len(len);
 
-                let last = *b.data().last().unwrap();
+                if words.len() >= required {
 
-                if rem == 0 {
-                    prop_assert_eq!(last, words.last().copied().unwrap());
-                } else {
-                    let mask = (1u64 << rem) - 1;
-                    prop_assert_eq!(last, words.last().unwrap() & mask);
+                    let b = MacroBits::try_from_words(&words, len).unwrap();
+
+                    let rem = len % MBLH::WORD_BIT_WIDTH;
+
+                    let last = *b.data().last().unwrap();
+
+                    if rem == 0 {
+                        prop_assert_eq!(last, words[required-1]);
+                    } else {
+                        let mask = (1u64 << rem) - 1;
+                        prop_assert_eq!(last, words[required-1] & mask);
+                    }
                 }
             }
         }

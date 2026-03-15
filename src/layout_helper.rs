@@ -5,7 +5,7 @@ impl MBLH {
     pub(crate) const WORD_BIT_WIDTH: usize = 64;
 
     #[inline]
-    pub(crate) const fn word_len(len: usize) -> usize {
+    pub(crate) const fn required_word_len(len: usize) -> usize {
         len.div_ceil(Self::WORD_BIT_WIDTH)
     }
 
@@ -19,7 +19,7 @@ impl MBLH {
     }
 
     #[inline]
-    pub(crate) const fn sanitize_last(data: &mut [u64], len: usize) {
+    pub(crate) const fn sanitize_last_word(data: &mut [u64], len: usize) {
         if let Some(last) = data.last_mut() {
             let rem = len % 64;
             *last &= Self::tail_mask(rem);
